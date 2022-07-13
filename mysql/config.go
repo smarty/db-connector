@@ -82,11 +82,8 @@ func (this *configuration) String() string {
 
 	return builder.String()
 }
-func (singleton) TLSConfig(value *tls.Config) option {
-	return func(this *configuration) { this.TLSConfig = value }
-}
-func (singleton) TLSRegistration(value func(string, *tls.Config) error) option {
-	return func(this *configuration) { this.TLSRegistration = value }
+func (singleton) TLS(value *tls.Config, registration func(string, *tls.Config) error) option {
+	return func(this *configuration) { this.TLSConfig = value; this.TLSRegistration = registration }
 }
 func (singleton) Username(value string) option {
 	return func(this *configuration) { this.Username = value }
@@ -140,8 +137,7 @@ func (singleton) apply(options ...option) option {
 }
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
-		Options.TLSConfig(nil),
-		Options.TLSRegistration(nil),
+		Options.TLS(nil, nil),
 		Options.Username("root"),
 		Options.Password(""),
 		Options.Protocol("tcp"),
