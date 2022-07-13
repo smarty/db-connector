@@ -19,7 +19,7 @@ func Open(options ...option) (*sql.DB, error) {
 
 type configuration struct {
 	TLSConfig             *tls.Config
-	TLSRegistration       func(string, *tls.Config)
+	TLSRegistration       func(string, *tls.Config) error
 	Username              string
 	Password              string
 	Protocol              string
@@ -76,7 +76,7 @@ func (this *configuration) String() string {
 		_, _ = fmt.Fprintf(builder, "&tls=%s", tlsName)
 
 		if this.TLSRegistration != nil {
-			this.TLSRegistration(tlsName, this.TLSConfig)
+			_ = this.TLSRegistration(tlsName, this.TLSConfig)
 		}
 	}
 
@@ -85,7 +85,7 @@ func (this *configuration) String() string {
 func (singleton) TLSConfig(value *tls.Config) option {
 	return func(this *configuration) { this.TLSConfig = value }
 }
-func (singleton) TLSRegistration(value func(string, *tls.Config)) option {
+func (singleton) TLSRegistration(value func(string, *tls.Config) error) option {
 	return func(this *configuration) { this.TLSRegistration = value }
 }
 func (singleton) Username(value string) option {
