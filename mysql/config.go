@@ -17,12 +17,12 @@ func Open(options ...option) (*sql.DB, error) {
 }
 
 type configuration struct {
+	TLSRegistration       string
 	Username              string
 	Password              string
 	Protocol              string
 	Address               string
 	Schema                string
-	TLSRegistration       string
 	Collation             string
 	ParseTime             bool
 	InterpolateParameters bool
@@ -52,7 +52,6 @@ func (this *configuration) String() string {
 	_, _ = fmt.Fprintf(builder, "/%s", this.Schema)
 
 	_, _ = fmt.Fprintf(builder, "?collation=%s", this.Collation)
-	_, _ = fmt.Fprintf(builder, "&tls=%s", this.TLSRegistration)
 	_, _ = fmt.Fprintf(builder, "&parseTime=%v", this.ParseTime)
 	_, _ = fmt.Fprintf(builder, "&interpolateParams=%v", this.InterpolateParameters)
 	_, _ = fmt.Fprintf(builder, "&rejectReadOnly=%v", !this.AllowReadOnly)
@@ -61,6 +60,10 @@ func (this *configuration) String() string {
 	_, _ = fmt.Fprintf(builder, "&readTimeout=%s", this.ReadTimeout)
 	_, _ = fmt.Fprintf(builder, "&writeTimeout=%s", this.WriteTimeout)
 	_, _ = fmt.Fprintf(builder, "&transaction_isolation=%s", isolationLevels[this.IsolationLevel])
+
+	if len(this.TLSRegistration) > 0 {
+		_, _ = fmt.Fprintf(builder, "&tls=%s", this.TLSRegistration)
+	}
 
 	return builder.String()
 }
@@ -85,9 +88,6 @@ func (singleton) Schema(value string) option {
 func (singleton) Collation(value string) option {
 	return func(this *configuration) { this.Collation = value }
 }
-func (singleton) IsolationLevel(value sql.IsolationLevel) option {
-	return func(this *configuration) { this.IsolationLevel = value }
-}
 func (singleton) ParseTime(value bool) option {
 	return func(this *configuration) { this.ParseTime = value }
 }
@@ -109,6 +109,9 @@ func (singleton) ReadTimeout(value time.Duration) option {
 func (singleton) WriteTimeout(value time.Duration) option {
 	return func(this *configuration) { this.WriteTimeout = value }
 }
+func (singleton) IsolationLevel(value sql.IsolationLevel) option {
+	return func(this *configuration) { this.IsolationLevel = value }
+}
 
 func (singleton) apply(options ...option) option {
 	return func(this *configuration) {
@@ -119,13 +122,12 @@ func (singleton) apply(options ...option) option {
 }
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
-		Options.TLSRegistration("mysql"),
+		Options.TLSRegistration(""),
 		Options.Username("root"),
 		Options.Password(""),
 		Options.Protocol("tcp"),
 		Options.Address("127.0.0.1"),
 		Options.Collation("utf8_unicode_520_ci"),
-		Options.TLSRegistration("default"),
 		Options.ParseTime(true),
 		Options.InterpolateParameters(true),
 		Options.AllowReadOnly(false),
