@@ -1,6 +1,7 @@
 package mysql
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
@@ -67,8 +68,12 @@ func (this *configuration) String() string {
 
 	return builder.String()
 }
-func (singleton) TLSRegistration(value string) option {
-	return func(this *configuration) { this.TLSRegistration = value }
+func (singleton) TLSRegistration(value string, config *tls.Config) option {
+	return func(this *configuration) {
+		if config != nil {
+			this.TLSRegistration = value
+		}
+	}
 }
 func (singleton) Username(value string) option {
 	return func(this *configuration) { this.Username = value }
@@ -122,7 +127,7 @@ func (singleton) apply(options ...option) option {
 }
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
-		Options.TLSRegistration(""),
+		Options.TLSRegistration("", nil),
 		Options.Username("root"),
 		Options.Password(""),
 		Options.Protocol("tcp"),
