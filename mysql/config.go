@@ -18,7 +18,8 @@ func Open(options ...option) (*sql.DB, error) {
 }
 
 type configuration struct {
-	TLSRegistration       string
+	TLSConfig             *tls.Config
+	TLSRegistration       func(string, *tls.Config)
 	Username              string
 	Password              string
 	Protocol              string
@@ -35,12 +36,21 @@ type configuration struct {
 	IsolationLevel        sql.IsolationLevel
 }
 
+func (this *configuration) UniqueTLSName() string {
+	if this.TLSConfig == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+}
+
 func (this *configuration) String() string {
 	builder := &strings.Builder{}
 
 	var (
 		username = tryReadValue(this.Username)
 		password = tryReadValue(this.Password)
+		tlsName  = this.UniqueTLSName()
 	)
 
 	if len(username) > 0 && len(password) > 0 {
@@ -62,18 +72,21 @@ func (this *configuration) String() string {
 	_, _ = fmt.Fprintf(builder, "&writeTimeout=%s", this.WriteTimeout)
 	_, _ = fmt.Fprintf(builder, "&transaction_isolation=%s", isolationLevels[this.IsolationLevel])
 
-	if len(this.TLSRegistration) > 0 {
-		_, _ = fmt.Fprintf(builder, "&tls=%s", this.TLSRegistration)
+	if len(tlsName) > 0 {
+		_, _ = fmt.Fprintf(builder, "&tls=%s", tlsName)
+
+		if this.TLSRegistration != nil {
+			this.TLSRegistration(tlsName, this.TLSConfig)
+		}
 	}
 
 	return builder.String()
 }
-func (singleton) TLSRegistration(value string, config *tls.Config) option {
-	return func(this *configuration) {
-		if config != nil {
-			this.TLSRegistration = value
-		}
-	}
+func (singleton) TLSConfig(value *tls.Config) option {
+	return func(this *configuration) { this.TLSConfig = value }
+}
+func (singleton) TLSRegistration(value func(string, *tls.Config)) option {
+	return func(this *configuration) { this.TLSRegistration = value }
 }
 func (singleton) Username(value string) option {
 	return func(this *configuration) { this.Username = value }
@@ -127,7 +140,8 @@ func (singleton) apply(options ...option) option {
 }
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
-		Options.TLSRegistration("", nil),
+		Options.TLSConfig(nil),
+		Options.TLSRegistration(nil),
 		Options.Username("root"),
 		Options.Password(""),
 		Options.Protocol("tcp"),
