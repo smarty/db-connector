@@ -4,161 +4,102 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
-	"net/url"
-	"strings"
+	"strconv"
 	"time"
 
-	"github.com/smarty/db-connector/internal"
+	"github.com/go-sql-driver/mysql"
 )
 
 func New(options ...option) (*sql.DB, error) {
-	var config configuration
+	driverConfig := &mysql.Config{Params: map[string]string{}}
+	config := configuration{DriverConfig: driverConfig}
 	Options.apply(options...)(&config)
 
-	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with data source settings: [%s]", config.Name, config.render(true))
-	if handle, err := sql.Open("mysql", config.render(false)); err != nil {
-		return nil, err
-	} else {
-		handle.SetConnMaxIdleTime(config.MaxConnectionIdleTimeout)
-		handle.SetConnMaxLifetime(config.MaxConnectionLifetime)
-		handle.SetMaxOpenConns(config.MaxOpenConnections)
-		handle.SetMaxIdleConns(config.MaxIdleConnections)
-		return handle, nil
+	_ = mysql.SetLogger(config.Logger)
+	if config.TLSConfig != nil {
+		config.DriverConfig.TLSConfig = strconv.FormatInt(config.TLSIdentifier, 10)
+		_ = mysql.RegisterTLSConfig(config.DriverConfig.TLSConfig, config.TLSConfig)
 	}
+
+	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] on schema [%s].", config.Name, driverConfig.User, driverConfig.Net, driverConfig.Addr, driverConfig.DBName)
+	connector, err := mysql.NewConnector(driverConfig)
+	if err != nil {
+		return nil, fmt.Errorf("unable to establish MySQL database handle: %w", err)
+	}
+
+	handle := sql.OpenDB(connector)
+	handle.SetConnMaxIdleTime(config.MaxConnectionIdleTimeout)
+	handle.SetConnMaxLifetime(config.MaxConnectionLifetime)
+	handle.SetMaxOpenConns(config.MaxOpenConnections)
+	handle.SetMaxIdleConns(config.MaxIdleConnections)
+	return handle, nil
 }
 
 type configuration struct {
 	TLSConfig                *tls.Config
-	TLSRegistration          func(string, *tls.Config) error
-	tlsName                  string
+	TLSIdentifier            int64
 	Name                     string
-	Username                 string
-	Password                 string
-	Network                  string
-	Address                  string
-	Schema                   string
-	Collation                string
-	ParseTime                bool
-	InterpolateParameters    bool
-	MultipleStatements       bool
-	AllowReadOnly            bool
-	ClientFoundRows          bool
-	DialTimeout              time.Duration
-	ReadTimeout              time.Duration
-	WriteTimeout             time.Duration
+	DriverConfig             *mysql.Config
 	MaxConnectionIdleTimeout time.Duration
 	MaxConnectionLifetime    time.Duration
 	MaxIdleConnections       int
 	MaxOpenConnections       int
-	IsolationLevel           sql.IsolationLevel
 	Logger                   logger
 }
 
-func (this *configuration) uniqueTLSName() string {
-	if len(this.tlsName) > 0 {
-		return this.tlsName
-	}
+func (singleton) TLS(value *tls.Config) option {
+	return func(this *configuration) {
+		this.TLSConfig = value
 
-	if this.TLSConfig == nil {
-		return ""
-	}
-
-	this.tlsName = fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	return this.tlsName
-}
-
-func (this *configuration) render(redact bool) string {
-	builder := &strings.Builder{}
-
-	var (
-		username = internal.TryReadValue(this.Username)
-		password = internal.TryReadValue(this.Password)
-		tlsName  = this.uniqueTLSName()
-	)
-
-	if redact && len(password) > 0 {
-		password = "REDACTED"
-	}
-
-	if len(username) > 0 && len(password) > 0 {
-		_, _ = fmt.Fprintf(builder, "%s:%s@", username, password)
-	} else if len(username) > 0 {
-		_, _ = fmt.Fprintf(builder, "%s@", username)
-	}
-
-	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Network, internal.TryReadValue(this.Address))
-	_, _ = fmt.Fprintf(builder, "/%s", this.Schema)
-
-	settings := url.Values{
-		"collation":             []string{this.Collation},
-		"parseTime":             []string{fmt.Sprintf("%v", this.ParseTime)},
-		"interpolateParams":     []string{fmt.Sprintf("%v", this.InterpolateParameters)},
-		"multiStatements":       []string{fmt.Sprintf("%v", this.MultipleStatements)},
-		"rejectReadOnly":        []string{fmt.Sprintf("%v", !this.AllowReadOnly)},
-		"clientFoundRows":       []string{fmt.Sprintf("%v", this.ClientFoundRows)},
-		"timeout":               []string{fmt.Sprintf("%v", this.DialTimeout)},
-		"readTimeout":           []string{fmt.Sprintf("%v", this.ReadTimeout)},
-		"writeTimeout":          []string{fmt.Sprintf("%v", this.WriteTimeout)},
-		"transaction_isolation": []string{fmt.Sprintf("'%s'", isolationLevels[this.IsolationLevel])},
-	}
-
-	if len(tlsName) > 0 {
-		settings["tls"] = []string{tlsName}
-		if this.TLSRegistration != nil {
-			_ = this.TLSRegistration(tlsName, this.TLSConfig)
+		if value != nil {
+			this.TLSIdentifier = time.Now().UTC().UnixNano()
 		}
 	}
-
-	_, _ = fmt.Fprintf(builder, "?%s", settings.Encode())
-	return builder.String()
-}
-func (singleton) TLS(value *tls.Config, registration func(string, *tls.Config) error) option {
-	return func(this *configuration) { this.TLSConfig = value; this.TLSRegistration = registration }
 }
 func (singleton) Name(value string) option {
 	return func(this *configuration) { this.Name = value }
 }
 func (singleton) Username(value string) option {
-	return func(this *configuration) { this.Username = value }
+	return func(this *configuration) { this.DriverConfig.User = value }
 }
 func (singleton) Password(value string) option {
-	return func(this *configuration) { this.Password = value }
+	return func(this *configuration) { this.DriverConfig.Passwd = value }
 }
 func (singleton) Network(value string) option {
-	return func(this *configuration) { this.Network = value }
+	return func(this *configuration) { this.DriverConfig.Net = value }
 }
 func (singleton) Address(value string) option {
-	return func(this *configuration) { this.Address = value }
+	return func(this *configuration) { this.DriverConfig.Addr = value }
 }
 func (singleton) Schema(value string) option {
-	return func(this *configuration) { this.Schema = value }
+	return func(this *configuration) { this.DriverConfig.DBName = value }
 }
 func (singleton) Collation(value string) option {
-	return func(this *configuration) { this.Collation = value }
+	return func(this *configuration) { this.DriverConfig.Collation = value }
 }
 func (singleton) ParseTime(value bool) option {
-	return func(this *configuration) { this.ParseTime = value }
+	return func(this *configuration) { this.DriverConfig.ParseTime = value }
 }
 func (singleton) InterpolateParameters(value bool) option {
-	return func(this *configuration) { this.InterpolateParameters = value }
+	return func(this *configuration) { this.DriverConfig.InterpolateParams = value }
 }
 func (singleton) MultipleStatements(value bool) option {
-	return func(this *configuration) { this.MultipleStatements = value }
+	return func(this *configuration) { this.DriverConfig.MultiStatements = value }
 }
 func (singleton) AllowReadOnly(value bool) option {
-	return func(this *configuration) { this.AllowReadOnly = value }
+	return func(this *configuration) { this.DriverConfig.RejectReadOnly = !value }
 }
 func (singleton) ClientFoundRows(value bool) option {
-	return func(this *configuration) { this.ClientFoundRows = value }
+	return func(this *configuration) { this.DriverConfig.ClientFoundRows = value }
 }
 func (singleton) DialTimeout(value time.Duration) option {
-	return func(this *configuration) { this.DialTimeout = value }
+	return func(this *configuration) { this.DriverConfig.Timeout = value }
 }
 func (singleton) ReadTimeout(value time.Duration) option {
-	return func(this *configuration) { this.ReadTimeout = value }
+	return func(this *configuration) { this.DriverConfig.ReadTimeout = value }
 }
 func (singleton) WriteTimeout(value time.Duration) option {
-	return func(this *configuration) { this.WriteTimeout = value }
+	return func(this *configuration) { this.DriverConfig.WriteTimeout = value }
 }
 func (singleton) MaxConnectionIdleTimeout(value time.Duration) option {
 	return func(this *configuration) { this.MaxConnectionIdleTimeout = value }
@@ -173,7 +114,7 @@ func (singleton) MaxIdleConnections(value uint16) option {
 	return func(this *configuration) { this.MaxIdleConnections = int(value) }
 }
 func (singleton) IsolationLevel(value sql.IsolationLevel) option {
-	return func(this *configuration) { this.IsolationLevel = value }
+	return func(this *configuration) { this.DriverConfig.Params["transaction_isolation"] = isolationLevels[value] }
 }
 func (singleton) Logger(value logger) option {
 	return func(this *configuration) {
@@ -194,7 +135,7 @@ func (singleton) apply(options ...option) option {
 }
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
-		Options.TLS(nil, nil),
+		Options.TLS(nil),
 		Options.Name("default-mysql-pool"),
 		Options.Username("root"),
 		Options.Password(""),
@@ -222,7 +163,10 @@ func (singleton) defaults(options ...option) []option {
 
 type option func(*configuration)
 type singleton struct{}
-type logger interface{ Printf(string, ...any) }
+type logger interface {
+	Print(...any)
+	Printf(string, ...any)
+}
 
 var Options singleton
 
@@ -230,4 +174,18 @@ var Options singleton
 
 type nop struct{}
 
+func (*nop) Print(...any)          {}
 func (*nop) Printf(string, ...any) {}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+var isolationLevels = map[sql.IsolationLevel]string{
+	sql.LevelDefault:         "'READ-COMMITTED'",
+	sql.LevelReadUncommitted: "'READ-UNCOMMITTED'",
+	sql.LevelReadCommitted:   "'READ-COMMITTED'",
+	sql.LevelWriteCommitted:  "'WRITE-COMMITTED'",
+	sql.LevelRepeatableRead:  "'REPEATABLE-READ'",
+	sql.LevelSnapshot:        "'SNAPSHOT'",
+	sql.LevelSerializable:    "'SERIALIZABLE'",
+	sql.LevelLinearizable:    "'LINEARIZABLE'",
+}
