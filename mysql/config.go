@@ -3,8 +3,26 @@ package mysql
 import (
 	"crypto/tls"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
+
+func New(options ...option) (*sql.DB, error) {
+	var config configuration
+	Options.apply(options...)(&config)
+
+	if handle, err := sql.Open("mysql", config.String(false)); err != nil {
+		return nil, err
+	} else {
+		config.Logger.Printf("[INFO] Established MySQL database handle [%s] with data source settings: [%s]", config.Name, config.String(true))
+		handle.SetConnMaxIdleTime(config.MaxConnectionIdleTimeout)
+		handle.SetConnMaxLifetime(config.MaxConnectionLifetime)
+		handle.SetMaxOpenConns(config.MaxOpenConnections)
+		handle.SetMaxIdleConns(config.MaxIdleConnections)
+		return handle, nil
+	}
+}
 
 type configuration struct {
 	TLSConfig                *tls.Config
@@ -31,6 +49,56 @@ type configuration struct {
 	Logger                   logger
 }
 
+func (this *configuration) UniqueTLSName() string {
+	if this.TLSConfig == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+}
+
+func (this *configuration) String(redact bool) string {
+	builder := &strings.Builder{}
+
+	var (
+		username = tryReadValue(this.Username)
+		password = tryReadValue(this.Password)
+		tlsName  = this.UniqueTLSName()
+	)
+
+	if redact {
+		password = "REDACTED"
+	}
+
+	if len(username) > 0 && len(password) > 0 && redact {
+		_, _ = fmt.Fprintf(builder, "%s:%s@", username, password)
+	} else if len(username) > 0 {
+		_, _ = fmt.Fprintf(builder, "%s@", username)
+	}
+
+	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Protocol, tryReadValue(this.Address))
+	_, _ = fmt.Fprintf(builder, "/%s", this.Schema)
+
+	_, _ = fmt.Fprintf(builder, "?collation=%s", this.Collation)
+	_, _ = fmt.Fprintf(builder, "&parseTime=%v", this.ParseTime)
+	_, _ = fmt.Fprintf(builder, "&interpolateParams=%v", this.InterpolateParameters)
+	_, _ = fmt.Fprintf(builder, "&rejectReadOnly=%v", !this.AllowReadOnly)
+	_, _ = fmt.Fprintf(builder, "&clientFoundRows=%v", this.ClientFoundRows)
+	_, _ = fmt.Fprintf(builder, "&timeout=%s", this.DialTimeout)
+	_, _ = fmt.Fprintf(builder, "&readTimeout=%s", this.ReadTimeout)
+	_, _ = fmt.Fprintf(builder, "&writeTimeout=%s", this.WriteTimeout)
+	_, _ = fmt.Fprintf(builder, "&transaction_isolation='%s'", isolationLevels[this.IsolationLevel])
+
+	if len(tlsName) > 0 {
+		_, _ = fmt.Fprintf(builder, "&tls=%s", tlsName)
+
+		if this.TLSRegistration != nil {
+			_ = this.TLSRegistration(tlsName, this.TLSConfig)
+		}
+	}
+
+	return builder.String()
+}
 func (singleton) TLS(value *tls.Config, registration func(string, *tls.Config) error) option {
 	return func(this *configuration) { this.TLSConfig = value; this.TLSRegistration = registration }
 }
