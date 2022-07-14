@@ -54,9 +54,9 @@ func (this *configuration) String() string {
 	)
 
 	if len(username) > 0 && len(password) > 0 {
-		_, _ = fmt.Fprintf(builder, "%s:%ss", username, password)
+		_, _ = fmt.Fprintf(builder, "%s:%ss@", username, password)
 	} else if len(username) > 0 {
-		_, _ = fmt.Fprintf(builder, "%s", username)
+		_, _ = fmt.Fprintf(builder, "%s@", username)
 	}
 
 	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Protocol, tryReadValue(this.Address))
@@ -70,7 +70,7 @@ func (this *configuration) String() string {
 	_, _ = fmt.Fprintf(builder, "&timeout=%s", this.DialTimeout)
 	_, _ = fmt.Fprintf(builder, "&readTimeout=%s", this.ReadTimeout)
 	_, _ = fmt.Fprintf(builder, "&writeTimeout=%s", this.WriteTimeout)
-	_, _ = fmt.Fprintf(builder, "&transaction_isolation=%s", isolationLevels[this.IsolationLevel])
+	_, _ = fmt.Fprintf(builder, "&transaction_isolation='%s'", isolationLevels[this.IsolationLevel])
 
 	if len(tlsName) > 0 {
 		_, _ = fmt.Fprintf(builder, "&tls=%s", tlsName)
