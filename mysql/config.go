@@ -185,7 +185,7 @@ func (singleton) defaults(options ...option) []option {
 		Options.Username("root"),
 		Options.Password(""),
 		Options.Protocol("tcp"),
-		Options.Address("127.0.0.1"),
+		Options.Address("127.0.0.1:3306"),
 		Options.Collation("utf8_unicode_520_ci"),
 		Options.ParseTime(true),
 		Options.InterpolateParameters(true),
