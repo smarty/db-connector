@@ -15,30 +15,39 @@ func New(options ...option) (*sql.DB, error) {
 	if handle, err := sql.Open("mysql", config.String(false)); err != nil {
 		return nil, err
 	} else {
-		config.Logger.Printf("[INFO] Creating MySQL database handle [%s] with data source settings: [%s]", config.Name, config.String(true))
+		config.Logger.Printf("[INFO] Established MySQL database handle [%s] with data source settings: [%s]", config.Name, config.String(true))
+		config.Logger.Printf("%v %v %d %d", config.MaxConnectionIdleTimeout, config.MaxConnectionLifetime, config.MaxIdleConnections, config.MaxOpenConnections)
+		handle.SetConnMaxIdleTime(config.MaxConnectionIdleTimeout)
+		handle.SetConnMaxLifetime(config.MaxConnectionLifetime)
+		handle.SetMaxOpenConns(config.MaxOpenConnections)
+		handle.SetMaxIdleConns(config.MaxIdleConnections)
 		return handle, nil
 	}
 }
 
 type configuration struct {
-	TLSConfig             *tls.Config
-	TLSRegistration       func(string, *tls.Config) error
-	Name                  string
-	Username              string
-	Password              string
-	Protocol              string
-	Address               string
-	Schema                string
-	Collation             string
-	ParseTime             bool
-	InterpolateParameters bool
-	AllowReadOnly         bool
-	ClientFoundRows       bool
-	DialTimeout           time.Duration
-	ReadTimeout           time.Duration
-	WriteTimeout          time.Duration
-	IsolationLevel        sql.IsolationLevel
-	Logger                logger
+	TLSConfig                *tls.Config
+	TLSRegistration          func(string, *tls.Config) error
+	Name                     string
+	Username                 string
+	Password                 string
+	Protocol                 string
+	Address                  string
+	Schema                   string
+	Collation                string
+	ParseTime                bool
+	InterpolateParameters    bool
+	AllowReadOnly            bool
+	ClientFoundRows          bool
+	DialTimeout              time.Duration
+	ReadTimeout              time.Duration
+	WriteTimeout             time.Duration
+	MaxConnectionIdleTimeout time.Duration
+	MaxConnectionLifetime    time.Duration
+	MaxIdleConnections       int
+	MaxOpenConnections       int
+	IsolationLevel           sql.IsolationLevel
+	Logger                   logger
 }
 
 func (this *configuration) UniqueTLSName() string {
@@ -136,6 +145,18 @@ func (singleton) ReadTimeout(value time.Duration) option {
 func (singleton) WriteTimeout(value time.Duration) option {
 	return func(this *configuration) { this.WriteTimeout = value }
 }
+func (singleton) MaxConnectionIdleTimeout(value time.Duration) option {
+	return func(this *configuration) { this.MaxConnectionIdleTimeout = value }
+}
+func (singleton) MaxConnectionLifetime(value time.Duration) option {
+	return func(this *configuration) { this.MaxConnectionLifetime = value }
+}
+func (singleton) MaxOpenConnections(value uint16) option {
+	return func(this *configuration) { this.MaxOpenConnections = int(value) }
+}
+func (singleton) MaxIdleConnections(value uint16) option {
+	return func(this *configuration) { this.MaxIdleConnections = int(value) }
+}
 func (singleton) IsolationLevel(value sql.IsolationLevel) option {
 	return func(this *configuration) { this.IsolationLevel = value }
 }
@@ -172,6 +193,10 @@ func (singleton) defaults(options ...option) []option {
 		Options.DialTimeout(time.Second * 15),
 		Options.ReadTimeout(time.Second * 15),
 		Options.WriteTimeout(time.Second * 30),
+		Options.MaxConnectionIdleTimeout(time.Hour * 720),
+		Options.MaxConnectionLifetime(time.Hour * 720),
+		Options.MaxIdleConnections(1024),
+		Options.MaxOpenConnections(1024),
 		Options.IsolationLevel(sql.LevelReadCommitted),
 		Options.Logger(&nop{}),
 	}, options...)
