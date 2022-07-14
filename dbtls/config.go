@@ -44,8 +44,11 @@ func sanitize(value string) string {
 }
 func resolvePEM(source, filename string) ([]byte, error) {
 	if len(filename) > 0 {
-		raw, err := ioutil.ReadFile(filename)
-		return raw, fmt.Errorf("%w: %s", ErrReadPEMFile, err)
+		if raw, err := ioutil.ReadFile(filename); err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrReadPEMFile, err)
+		} else {
+			return raw, nil
+		}
 	}
 
 	if len(source) == 0 {
