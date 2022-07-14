@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/smarty/db-connector/internal"
 )
 
 func New(options ...option) (*sql.DB, error) {
@@ -61,8 +63,8 @@ func (this *configuration) String(redact bool) string {
 	builder := &strings.Builder{}
 
 	var (
-		username = tryReadValue(this.Username)
-		password = tryReadValue(this.Password)
+		username = internal.TryReadValue(this.Username)
+		password = internal.TryReadValue(this.Password)
 		tlsName  = this.UniqueTLSName()
 	)
 
@@ -76,7 +78,7 @@ func (this *configuration) String(redact bool) string {
 		_, _ = fmt.Fprintf(builder, "%s@", username)
 	}
 
-	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Protocol, tryReadValue(this.Address))
+	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Protocol, internal.TryReadValue(this.Address))
 	_, _ = fmt.Fprintf(builder, "/%s", this.Schema)
 
 	_, _ = fmt.Fprintf(builder, "?collation=%s", this.Collation)
