@@ -203,7 +203,7 @@ func (singleton) defaults(options ...option) []option {
 		Options.Collation("utf8_unicode_520_ci"),
 		Options.ParseTime(true),
 		Options.InterpolateParameters(true),
-		Options.MultipleStatements(true),
+		Options.MultipleStatements(false),
 		Options.AllowReadOnly(false),
 		Options.ClientFoundRows(true),
 		Options.DialTimeout(time.Second * 15),
