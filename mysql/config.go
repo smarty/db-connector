@@ -80,7 +80,7 @@ func (this *configuration) render(redact bool) string {
 		password = "REDACTED"
 	}
 
-	if len(username) > 0 && len(password) > 0 && redact {
+	if len(username) > 0 && len(password) > 0 {
 		_, _ = fmt.Fprintf(builder, "%s:%s@", username, password)
 	} else if len(username) > 0 {
 		_, _ = fmt.Fprintf(builder, "%s@", username)
