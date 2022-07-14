@@ -40,6 +40,7 @@ type configuration struct {
 	Collation                string
 	ParseTime                bool
 	InterpolateParameters    bool
+	MultipleStatements       bool
 	AllowReadOnly            bool
 	ClientFoundRows          bool
 	DialTimeout              time.Duration
@@ -92,6 +93,7 @@ func (this *configuration) render(redact bool) string {
 		"collation":             []string{this.Collation},
 		"parseTime":             []string{fmt.Sprintf("%v", this.ParseTime)},
 		"interpolateParams":     []string{fmt.Sprintf("%v", this.InterpolateParameters)},
+		"multiStatements":       []string{fmt.Sprintf("%v", this.MultipleStatements)},
 		"rejectReadOnly":        []string{fmt.Sprintf("%v", !this.AllowReadOnly)},
 		"clientFoundRows":       []string{fmt.Sprintf("%v", this.ClientFoundRows)},
 		"timeout":               []string{fmt.Sprintf("%v", this.DialTimeout)},
@@ -139,6 +141,9 @@ func (singleton) ParseTime(value bool) option {
 }
 func (singleton) InterpolateParameters(value bool) option {
 	return func(this *configuration) { this.InterpolateParameters = value }
+}
+func (singleton) MultipleStatements(value bool) option {
+	return func(this *configuration) { this.MultipleStatements = value }
 }
 func (singleton) AllowReadOnly(value bool) option {
 	return func(this *configuration) { this.AllowReadOnly = value }
@@ -198,6 +203,7 @@ func (singleton) defaults(options ...option) []option {
 		Options.Collation("utf8_unicode_520_ci"),
 		Options.ParseTime(true),
 		Options.InterpolateParameters(true),
+		Options.MultipleStatements(true),
 		Options.AllowReadOnly(false),
 		Options.ClientFoundRows(true),
 		Options.DialTimeout(time.Second * 15),
