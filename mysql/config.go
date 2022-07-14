@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,10 +15,10 @@ func New(options ...option) (*sql.DB, error) {
 	var config configuration
 	Options.apply(options...)(&config)
 
-	if handle, err := sql.Open("mysql", config.String(false)); err != nil {
+	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with data source settings: [%s]", config.Name, config.render(true))
+	if handle, err := sql.Open("mysql", config.render(false)); err != nil {
 		return nil, err
 	} else {
-		config.Logger.Printf("[INFO] Established MySQL database handle [%s] with data source settings: [%s]", config.Name, config.String(true))
 		handle.SetConnMaxIdleTime(config.MaxConnectionIdleTimeout)
 		handle.SetConnMaxLifetime(config.MaxConnectionLifetime)
 		handle.SetMaxOpenConns(config.MaxOpenConnections)
@@ -29,10 +30,11 @@ func New(options ...option) (*sql.DB, error) {
 type configuration struct {
 	TLSConfig                *tls.Config
 	TLSRegistration          func(string, *tls.Config) error
+	tlsName                  string
 	Name                     string
 	Username                 string
 	Password                 string
-	Protocol                 string
+	Network                  string
 	Address                  string
 	Schema                   string
 	Collation                string
@@ -51,24 +53,29 @@ type configuration struct {
 	Logger                   logger
 }
 
-func (this *configuration) UniqueTLSName() string {
+func (this *configuration) uniqueTLSName() string {
+	if len(this.tlsName) > 0 {
+		return this.tlsName
+	}
+
 	if this.TLSConfig == nil {
 		return ""
 	}
 
-	return fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	this.tlsName = fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	return this.tlsName
 }
 
-func (this *configuration) String(redact bool) string {
+func (this *configuration) render(redact bool) string {
 	builder := &strings.Builder{}
 
 	var (
 		username = internal.TryReadValue(this.Username)
 		password = internal.TryReadValue(this.Password)
-		tlsName  = this.UniqueTLSName()
+		tlsName  = this.uniqueTLSName()
 	)
 
-	if redact {
+	if redact && len(password) > 0 {
 		password = "REDACTED"
 	}
 
@@ -78,27 +85,29 @@ func (this *configuration) String(redact bool) string {
 		_, _ = fmt.Fprintf(builder, "%s@", username)
 	}
 
-	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Protocol, internal.TryReadValue(this.Address))
+	_, _ = fmt.Fprintf(builder, "%s(%s)", this.Network, internal.TryReadValue(this.Address))
 	_, _ = fmt.Fprintf(builder, "/%s", this.Schema)
 
-	_, _ = fmt.Fprintf(builder, "?collation=%s", this.Collation)
-	_, _ = fmt.Fprintf(builder, "&parseTime=%v", this.ParseTime)
-	_, _ = fmt.Fprintf(builder, "&interpolateParams=%v", this.InterpolateParameters)
-	_, _ = fmt.Fprintf(builder, "&rejectReadOnly=%v", !this.AllowReadOnly)
-	_, _ = fmt.Fprintf(builder, "&clientFoundRows=%v", this.ClientFoundRows)
-	_, _ = fmt.Fprintf(builder, "&timeout=%s", this.DialTimeout)
-	_, _ = fmt.Fprintf(builder, "&readTimeout=%s", this.ReadTimeout)
-	_, _ = fmt.Fprintf(builder, "&writeTimeout=%s", this.WriteTimeout)
-	_, _ = fmt.Fprintf(builder, "&transaction_isolation='%s'", isolationLevels[this.IsolationLevel])
+	settings := url.Values{
+		"collation":             []string{this.Collation},
+		"parseTime":             []string{fmt.Sprintf("%v", this.ParseTime)},
+		"interpolateParams":     []string{fmt.Sprintf("%v", this.InterpolateParameters)},
+		"rejectReadOnly":        []string{fmt.Sprintf("%v", !this.AllowReadOnly)},
+		"clientFoundRows":       []string{fmt.Sprintf("%v", this.ClientFoundRows)},
+		"timeout":               []string{fmt.Sprintf("%v", this.DialTimeout)},
+		"readTimeout":           []string{fmt.Sprintf("%v", this.ReadTimeout)},
+		"writeTimeout":          []string{fmt.Sprintf("%v", this.WriteTimeout)},
+		"transaction_isolation": []string{fmt.Sprintf("'%s'", isolationLevels[this.IsolationLevel])},
+	}
 
 	if len(tlsName) > 0 {
-		_, _ = fmt.Fprintf(builder, "&tls=%s", tlsName)
-
+		settings["tls"] = []string{tlsName}
 		if this.TLSRegistration != nil {
 			_ = this.TLSRegistration(tlsName, this.TLSConfig)
 		}
 	}
 
+	_, _ = fmt.Fprintf(builder, "?%s", settings.Encode())
 	return builder.String()
 }
 func (singleton) TLS(value *tls.Config, registration func(string, *tls.Config) error) option {
@@ -113,8 +122,8 @@ func (singleton) Username(value string) option {
 func (singleton) Password(value string) option {
 	return func(this *configuration) { this.Password = value }
 }
-func (singleton) Protocol(value string) option {
-	return func(this *configuration) { this.Protocol = value }
+func (singleton) Network(value string) option {
+	return func(this *configuration) { this.Network = value }
 }
 func (singleton) Address(value string) option {
 	return func(this *configuration) { this.Address = value }
@@ -184,7 +193,7 @@ func (singleton) defaults(options ...option) []option {
 		Options.Name("default-mysql-pool"),
 		Options.Username("root"),
 		Options.Password(""),
-		Options.Protocol("tcp"),
+		Options.Network("tcp"),
 		Options.Address("127.0.0.1:3306"),
 		Options.Collation("utf8_unicode_520_ci"),
 		Options.ParseTime(true),
