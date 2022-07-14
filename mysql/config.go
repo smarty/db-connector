@@ -16,7 +16,6 @@ func New(options ...option) (*sql.DB, error) {
 		return nil, err
 	} else {
 		config.Logger.Printf("[INFO] Established MySQL database handle [%s] with data source settings: [%s]", config.Name, config.String(true))
-		config.Logger.Printf("%v %v %d %d", config.MaxConnectionIdleTimeout, config.MaxConnectionLifetime, config.MaxIdleConnections, config.MaxOpenConnections)
 		handle.SetConnMaxIdleTime(config.MaxConnectionIdleTimeout)
 		handle.SetConnMaxLifetime(config.MaxConnectionLifetime)
 		handle.SetMaxOpenConns(config.MaxOpenConnections)
