@@ -140,7 +140,13 @@ func (singleton) IsolationLevel(value sql.IsolationLevel) option {
 	return func(this *configuration) { this.IsolationLevel = value }
 }
 func (singleton) Logger(value logger) option {
-	return func(this *configuration) { this.Logger = value }
+	return func(this *configuration) {
+		if value == nil {
+			value = &nop{}
+		}
+
+		this.Logger = value
+	}
 }
 
 func (singleton) apply(options ...option) option {
