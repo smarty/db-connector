@@ -4,22 +4,26 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
-	"net/url"
-	"os"
 	"strings"
 	"time"
 )
 
-func Open(options ...option) (*sql.DB, error) {
+func New(options ...option) (*sql.DB, error) {
 	var config configuration
 	Options.apply(options...)(&config)
-	return sql.Open("mysql", config.String())
+
+	if handle, err := sql.Open("mysql", config.String(false)); err != nil {
+		return nil, err
+	} else {
+		config.Logger.Printf("[INFO] Creating MySQL database handle [%s] with data source settings: [%s]", config.Name, config.String(true))
+		return handle, nil
+	}
 }
 
 type configuration struct {
 	TLSConfig             *tls.Config
 	TLSRegistration       func(string, *tls.Config) error
+	Name                  string
 	Username              string
 	Password              string
 	Protocol              string
@@ -34,6 +38,7 @@ type configuration struct {
 	ReadTimeout           time.Duration
 	WriteTimeout          time.Duration
 	IsolationLevel        sql.IsolationLevel
+	Logger                logger
 }
 
 func (this *configuration) UniqueTLSName() string {
@@ -44,7 +49,7 @@ func (this *configuration) UniqueTLSName() string {
 	return fmt.Sprintf("%d", time.Now().UTC().UnixNano())
 }
 
-func (this *configuration) String() string {
+func (this *configuration) String(redact bool) string {
 	builder := &strings.Builder{}
 
 	var (
@@ -53,8 +58,12 @@ func (this *configuration) String() string {
 		tlsName  = this.UniqueTLSName()
 	)
 
-	if len(username) > 0 && len(password) > 0 {
-		_, _ = fmt.Fprintf(builder, "%s:%ss@", username, password)
+	if redact {
+		password = "REDACTED"
+	}
+
+	if len(username) > 0 && len(password) > 0 && redact {
+		_, _ = fmt.Fprintf(builder, "%s:%s@", username, password)
 	} else if len(username) > 0 {
 		_, _ = fmt.Fprintf(builder, "%s@", username)
 	}
@@ -84,6 +93,9 @@ func (this *configuration) String() string {
 }
 func (singleton) TLS(value *tls.Config, registration func(string, *tls.Config) error) option {
 	return func(this *configuration) { this.TLSConfig = value; this.TLSRegistration = registration }
+}
+func (singleton) Name(value string) option {
+	return func(this *configuration) { this.Name = value }
 }
 func (singleton) Username(value string) option {
 	return func(this *configuration) { this.Username = value }
@@ -127,6 +139,9 @@ func (singleton) WriteTimeout(value time.Duration) option {
 func (singleton) IsolationLevel(value sql.IsolationLevel) option {
 	return func(this *configuration) { this.IsolationLevel = value }
 }
+func (singleton) Logger(value logger) option {
+	return func(this *configuration) { this.Logger = value }
+}
 
 func (singleton) apply(options ...option) option {
 	return func(this *configuration) {
@@ -138,6 +153,7 @@ func (singleton) apply(options ...option) option {
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
 		Options.TLS(nil, nil),
+		Options.Name("default-mysql-pool"),
 		Options.Username("root"),
 		Options.Password(""),
 		Options.Protocol("tcp"),
@@ -151,6 +167,7 @@ func (singleton) defaults(options ...option) []option {
 		Options.ReadTimeout(time.Second * 15),
 		Options.WriteTimeout(time.Second * 30),
 		Options.IsolationLevel(sql.LevelReadCommitted),
+		Options.Logger(&nop{}),
 	}, options...)
 }
 
@@ -158,42 +175,12 @@ func (singleton) defaults(options ...option) []option {
 
 type option func(*configuration)
 type singleton struct{}
+type logger interface{ Printf(string, ...any) }
 
 var Options singleton
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-var isolationLevels = map[sql.IsolationLevel]string{
-	sql.LevelDefault:         "READ-COMMITTED",
-	sql.LevelReadUncommitted: "READ-UNCOMMITTED",
-	sql.LevelReadCommitted:   "READ-COMMITTED",
-	sql.LevelWriteCommitted:  "WRITE-COMMITTED",
-	sql.LevelRepeatableRead:  "REPEATABLE-READ",
-	sql.LevelSnapshot:        "SNAPSHOT",
-	sql.LevelSerializable:    "SERIALIZABLE",
-	sql.LevelLinearizable:    "LINEARIZABLE",
-}
+type nop struct{}
 
-func tryReadValue(value string) string {
-	if len(value) == 0 {
-		return ""
-	} else if parsed := parseURL(value); parsed != nil && parsed.Scheme == "env" {
-		return os.Getenv(parsed.Host)
-	} else if parsed != nil && parsed.Scheme == "file" {
-		raw, _ := ioutil.ReadFile(parsed.Path)
-		value = strings.TrimSpace(string(raw))
-		return value
-	} else {
-		return value
-	}
-}
-func parseURL(value string) *url.URL {
-	value = strings.TrimSpace(value)
-	if len(value) == 0 {
-		return nil
-	} else if parsed, err := url.Parse(value); err != nil {
-		return nil
-	} else {
-		return parsed
-	}
-}
+func (*nop) Printf(string, ...any) {}
