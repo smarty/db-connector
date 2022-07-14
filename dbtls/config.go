@@ -18,12 +18,14 @@ func New(options ...option) (*tls.Config, error) {
 	}
 
 	tlsConfig := &tls.Config{
-		MinVersion: config.MinTLSVersion,
-		ServerName: config.ServerName,
-		RootCAs:    config.newPool(),
+		MinVersion:             config.MinTLSVersion,
+		ServerName:             config.ServerName,
+		RootCAs:                config.newPool(),
+		SessionTicketsDisabled: true,
 	}
 
-	if trustedCAs, err := resolvePEM(config.TrustedCAsPEM, config.TrustedCAsPEMFile); err != nil {
+	sanitizedFilename := sanitize(config.TrustedCAsPEMFile)
+	if trustedCAs, err := resolvePEM(config.TrustedCAsPEM, sanitizedFilename); err != nil {
 		return nil, err
 	} else if ok := tlsConfig.RootCAs.AppendCertsFromPEM(trustedCAs); !ok {
 		return nil, fmt.Errorf("unable to parse trusted CA PEM: %w", ErrMalformedPEM)
@@ -31,6 +33,14 @@ func New(options ...option) (*tls.Config, error) {
 
 	// FUTURE: support server certificate(s), RSA/EC private key, and password-protected RSA/EC private key
 	return tlsConfig, nil
+}
+func sanitize(value string) string {
+	switch value {
+	case "public-ca", "true":
+		return ""
+	default:
+		return value
+	}
 }
 func resolvePEM(source, filename string) ([]byte, error) {
 	if len(filename) > 0 {
