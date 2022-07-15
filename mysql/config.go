@@ -11,7 +11,17 @@ import (
 )
 
 func New(options ...option) (*sql.DB, error) {
-	driverConfig := &mysql.Config{Params: map[string]string{}}
+	driverConfig := &mysql.Config{
+		Params:                  map[string]string{},
+		Loc:                     time.UTC,
+		MaxAllowedPacket:        4194304,
+		AllowAllFiles:           false,
+		AllowCleartextPasswords: false,
+		AllowNativePasswords:    false,
+		AllowOldPasswords:       false,
+		CheckConnLiveness:       true,
+		ColumnsWithAlias:        false,
+	}
 	config := configuration{DriverConfig: driverConfig}
 	Options.apply(options...)(&config)
 
