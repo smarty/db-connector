@@ -24,8 +24,7 @@ func New(options ...option) (*tls.Config, error) {
 		SessionTicketsDisabled: true,
 	}
 
-	sanitizedFilename := sanitize(config.TrustedCAsPEMFile)
-	if trustedCAs, err := resolvePEM(config.TrustedCAsPEM, sanitizedFilename); err != nil {
+	if trustedCAs, err := resolvePEM(config.TrustedCAsPEM, config.TrustedCAsPEMFile); err != nil {
 		return nil, err
 	} else if trustedCAs == nil {
 		// no-op
@@ -35,14 +34,6 @@ func New(options ...option) (*tls.Config, error) {
 
 	// FUTURE: support server certificate(s), RSA/EC private key, and password-protected RSA/EC private key
 	return tlsConfig, nil
-}
-func sanitize(value string) string {
-	switch value {
-	case "public-ca", "true":
-		return ""
-	default:
-		return value
-	}
 }
 func resolvePEM(source, filename string) ([]byte, error) {
 	if len(filename) > 0 {
@@ -92,13 +83,21 @@ func (singleton) ServerName(value string) option {
 	return func(this *configuration) { this.ServerName = value }
 }
 func (singleton) TrustedCAsPEM(value string) option {
-	return func(this *configuration) { this.TrustedCAsPEM = value }
+	return func(this *configuration) { this.TrustedCAsPEM = sanitize(value) }
 }
 func (singleton) TrustedCAsPEMFile(value string) option {
-	return func(this *configuration) { this.TrustedCAsPEMFile = value }
+	return func(this *configuration) { this.TrustedCAsPEMFile = sanitize(value) }
 }
 func (singleton) MinTLSVersion(value uint16) option {
 	return func(this *configuration) { this.MinTLSVersion = value }
+}
+func sanitize(value string) string {
+	switch value {
+	case "public-ca", "true":
+		return ""
+	default:
+		return value
+	}
 }
 
 func (singleton) apply(options ...option) option {
