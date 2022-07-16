@@ -27,6 +27,8 @@ func New(options ...option) (*tls.Config, error) {
 	sanitizedFilename := sanitize(config.TrustedCAsPEMFile)
 	if trustedCAs, err := resolvePEM(config.TrustedCAsPEM, sanitizedFilename); err != nil {
 		return nil, err
+	} else if trustedCAs == nil {
+		// no-op
 	} else if ok := tlsConfig.RootCAs.AppendCertsFromPEM(trustedCAs); !ok {
 		return nil, fmt.Errorf("unable to parse trusted CA PEM: %w", ErrMalformedPEM)
 	}
