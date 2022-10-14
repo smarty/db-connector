@@ -31,7 +31,7 @@ func New(options ...option) (*sql.DB, error) {
 		_ = mysql.RegisterTLSConfig(config.DriverConfig.TLSConfig, config.TLSConfig)
 	}
 
-	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] on schema [%s].", config.Name, driverConfig.User, driverConfig.Net, driverConfig.Addr, driverConfig.DBName)
+	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] using schema [%s].", config.Name, driverConfig.User, driverConfig.Net, driverConfig.Addr, driverConfig.DBName)
 	connector, err := mysql.NewConnector(driverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to establish MySQL database handle: %w", err)
