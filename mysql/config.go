@@ -34,10 +34,10 @@ func New(options ...option) (*sql.DB, error) {
 	}
 
 	network := driverConfig.Net
-	if config.DialContext != nil {
+	if config.Dialer != nil {
 		driverConfig.Net = strconv.FormatInt(config.TLSIdentifier, 10)
 		mysql.RegisterDialContext(driverConfig.Net, func(ctx context.Context, address string) (net.Conn, error) {
-			return config.DialContext(ctx, network, address)
+			return config.Dialer.DialContext(ctx, network, address)
 		})
 	}
 
@@ -58,8 +58,8 @@ func New(options ...option) (*sql.DB, error) {
 type configuration struct {
 	TLSConfig                *tls.Config
 	TLSIdentifier            int64
-	DialContext              func(context.Context, string, string) (net.Conn, error)
-	DialContextIdentifier    int64
+	Dialer                   Dialer
+	DialerIdentifier         int64
 	Name                     string
 	DriverConfig             *mysql.Config
 	MaxConnectionIdleTimeout time.Duration
@@ -79,13 +79,13 @@ func (singleton) TLS(value *tls.Config) option {
 		}
 	}
 }
-func (singleton) DialContext(value func(context.Context, string, string) (net.Conn, error)) option {
+func (singleton) Dialer(value Dialer) option {
 	return func(this *configuration) {
-		this.DialContext = value
+		this.Dialer = value
 		if value != nil {
-			this.DialContextIdentifier = time.Now().UTC().UnixNano()
+			this.DialerIdentifier = time.Now().UTC().UnixNano()
 		} else {
-			this.DialContextIdentifier = 0
+			this.DialerIdentifier = 0
 		}
 	}
 }
@@ -169,7 +169,7 @@ func (singleton) apply(options ...option) option {
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
 		Options.TLS(nil),
-		Options.DialContext(nil),
+		Options.Dialer(nil),
 		Options.Name("default-mysql-pool"),
 		Options.Username("root"),
 		Options.Password(""),

@@ -1,10 +1,16 @@
 package mysql
 
 import (
+	"context"
 	"errors"
+	"net"
 
 	"github.com/go-sql-driver/mysql"
 )
+
+type Dialer interface {
+	DialContext(context.Context, string, string) (net.Conn, error)
+}
 
 var (
 	ErrOptimisticConcurrency = errors.New("another writer has modified the underlying rows")
