@@ -28,7 +28,10 @@ func New(options ...option) (*sql.DB, error) {
 	Options.apply(options...)(&config)
 
 	_ = mysql.SetLogger(config.Logger)
+
+	var encryption string = "plaintext"
 	if config.TLSConfig != nil {
+		encryption = "TLS"
 		driverConfig.TLSConfig = strconv.FormatInt(config.TLSIdentifier, 10)
 		_ = mysql.RegisterTLSConfig(driverConfig.TLSConfig, config.TLSConfig)
 	}
@@ -37,11 +40,16 @@ func New(options ...option) (*sql.DB, error) {
 	if config.Dialer != nil {
 		driverConfig.Net = strconv.FormatInt(config.TLSIdentifier, 10)
 		mysql.RegisterDialContext(driverConfig.Net, func(ctx context.Context, address string) (net.Conn, error) {
-			return config.Dialer.DialContext(ctx, network, address)
+			if connection, err := config.Dialer.DialContext(ctx, network, address); err != nil {
+				return nil, err
+			} else {
+				config.Logger.Printf("[INFO] Established [%s] MySQL database connection [%s] with user [%s] to [%s://%s] using schema [%s].", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+				return connection, nil
+			}
 		})
 	}
 
-	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] using schema [%s].", config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+	config.Logger.Printf("[INFO] Establishing [%s] MySQL database connection [%s] with user [%s] to [%s://%s] using schema [%s]...", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
 	connector, err := mysql.NewConnector(driverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to establish MySQL database handle: %w", err)
