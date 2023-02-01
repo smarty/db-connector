@@ -36,7 +36,9 @@ func New(options ...option) (*sql.DB, error) {
 	network := driverConfig.Net
 	if config.DialContext != nil {
 		driverConfig.Net = strconv.FormatInt(config.TLSIdentifier, 10)
-		mysql.RegisterDialContext(driverConfig.Net, config.DialContext)
+		mysql.RegisterDialContext(driverConfig.Net, func(ctx context.Context, address string) (net.Conn, error) {
+			return config.DialContext(ctx, network, address)
+		})
 	}
 
 	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] using schema [%s].", config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
@@ -56,7 +58,7 @@ func New(options ...option) (*sql.DB, error) {
 type configuration struct {
 	TLSConfig                *tls.Config
 	TLSIdentifier            int64
-	DialContext              func(context.Context, string) (net.Conn, error)
+	DialContext              func(context.Context, string, string) (net.Conn, error)
 	DialContextIdentifier    int64
 	Name                     string
 	DriverConfig             *mysql.Config
@@ -77,7 +79,7 @@ func (singleton) TLS(value *tls.Config) option {
 		}
 	}
 }
-func (singleton) DialContext(value func(context.Context, string) (net.Conn, error)) option {
+func (singleton) DialContext(value func(context.Context, string, string) (net.Conn, error)) option {
 	return func(this *configuration) {
 		this.DialContext = value
 		if value != nil {
