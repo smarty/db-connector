@@ -1,9 +1,11 @@
 package mysql
 
 import (
+	"context"
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"net"
 	"strconv"
 	"time"
 
@@ -27,11 +29,17 @@ func New(options ...option) (*sql.DB, error) {
 
 	_ = mysql.SetLogger(config.Logger)
 	if config.TLSConfig != nil {
-		config.DriverConfig.TLSConfig = strconv.FormatInt(config.TLSIdentifier, 10)
-		_ = mysql.RegisterTLSConfig(config.DriverConfig.TLSConfig, config.TLSConfig)
+		driverConfig.TLSConfig = strconv.FormatInt(config.TLSIdentifier, 10)
+		_ = mysql.RegisterTLSConfig(driverConfig.TLSConfig, config.TLSConfig)
 	}
 
-	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] using schema [%s].", config.Name, driverConfig.User, driverConfig.Net, driverConfig.Addr, driverConfig.DBName)
+	network := driverConfig.Net
+	if config.DialContext != nil {
+		driverConfig.Net = strconv.FormatInt(config.TLSIdentifier, 10)
+		mysql.RegisterDialContext(driverConfig.Net, config.DialContext)
+	}
+
+	config.Logger.Printf("[INFO] Establishing MySQL database handle [%s] with user [%s] to [%s://%s] using schema [%s].", config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
 	connector, err := mysql.NewConnector(driverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to establish MySQL database handle: %w", err)
@@ -48,6 +56,8 @@ func New(options ...option) (*sql.DB, error) {
 type configuration struct {
 	TLSConfig                *tls.Config
 	TLSIdentifier            int64
+	DialContext              func(context.Context, string) (net.Conn, error)
+	DialContextIdentifier    int64
 	Name                     string
 	DriverConfig             *mysql.Config
 	MaxConnectionIdleTimeout time.Duration
@@ -60,9 +70,20 @@ type configuration struct {
 func (singleton) TLS(value *tls.Config) option {
 	return func(this *configuration) {
 		this.TLSConfig = value
-
 		if value != nil {
 			this.TLSIdentifier = time.Now().UTC().UnixNano()
+		} else {
+			this.TLSIdentifier = 0
+		}
+	}
+}
+func (singleton) DialContext(value func(context.Context, string) (net.Conn, error)) option {
+	return func(this *configuration) {
+		this.DialContext = value
+		if value != nil {
+			this.DialContextIdentifier = time.Now().UTC().UnixNano()
+		} else {
+			this.DialContextIdentifier = 0
 		}
 	}
 }
@@ -146,6 +167,7 @@ func (singleton) apply(options ...option) option {
 func (singleton) defaults(options ...option) []option {
 	return append([]option{
 		Options.TLS(nil),
+		Options.DialContext(nil),
 		Options.Name("default-mysql-pool"),
 		Options.Username("root"),
 		Options.Password(""),
