@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -39,17 +40,21 @@ func New(options ...option) (*sql.DB, error) {
 	network := driverConfig.Net
 	if config.Dialer != nil {
 		driverConfig.Net = strconv.FormatInt(config.TLSIdentifier, 10)
+		var opened uint32
+
 		mysql.RegisterDialContext(driverConfig.Net, func(ctx context.Context, address string) (net.Conn, error) {
 			if connection, err := config.Dialer.DialContext(ctx, network, address); err != nil {
 				return nil, err
 			} else {
-				config.Logger.Printf("[INFO] Established [%s] MySQL database connection [%s] with user [%s] to [%s://%s] using schema [%s].", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+				if atomic.AddUint32(&opened, 1) == 1 {
+					config.Logger.Printf("[INFO] Established [%s] MySQL pooled database connection [%s] with user [%s] to [%s://%s] using schema [%s].", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+				}
 				return connection, nil
 			}
 		})
 	}
 
-	config.Logger.Printf("[INFO] Establishing [%s] MySQL database connection [%s] with user [%s] to [%s://%s] using schema [%s]...", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+	config.Logger.Printf("[INFO] Establishing [%s] MySQL pooled database connection [%s] with user [%s] to [%s://%s] using schema [%s]...", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
 	connector, err := mysql.NewConnector(driverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to establish MySQL database handle: %w", err)
