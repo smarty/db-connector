@@ -32,7 +32,7 @@ func New(options ...option) (*sql.DB, error) {
 
 	var encryption string = "plaintext"
 	if config.TLSConfig != nil {
-		encryption = "TLS"
+		encryption = "encrypted"
 		driverConfig.TLSConfig = strconv.FormatInt(config.TLSIdentifier, 10)
 		_ = mysql.RegisterTLSConfig(driverConfig.TLSConfig, config.TLSConfig)
 	}
