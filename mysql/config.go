@@ -30,7 +30,7 @@ func New(options ...option) (*sql.DB, error) {
 
 	_ = mysql.SetLogger(config.Logger)
 
-	var encryption string = "plaintext"
+	encryption := "plaintext"
 	if config.TLSConfig != nil {
 		encryption = "encrypted"
 		driverConfig.TLSConfig = strconv.FormatInt(config.TLSIdentifier, 10)
@@ -47,14 +47,20 @@ func New(options ...option) (*sql.DB, error) {
 				return nil, err
 			} else {
 				if atomic.AddUint32(&opened, 1) == 1 {
-					config.Logger.Printf("[INFO] Established [%s] MySQL pooled database connection [%s] with user [%s] to [%s://%s] using schema [%s].", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+					config.Logger.Printf(
+						"[INFO] Established [%s] MySQL pooled database connection [%s] with user [%s] to [%s://%s] using schema [%s].",
+						encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName,
+					)
 				}
 				return connection, nil
 			}
 		})
 	}
 
-	config.Logger.Printf("[INFO] Establishing [%s] MySQL pooled database connection [%s] with user [%s] to [%s://%s] using schema [%s]...", encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName)
+	config.Logger.Printf(
+		"[INFO] Establishing [%s] MySQL pooled database connection [%s] with user [%s] to [%s://%s] using schema [%s]...",
+		encryption, config.Name, driverConfig.User, network, driverConfig.Addr, driverConfig.DBName,
+	)
 	connector, err := mysql.NewConnector(driverConfig)
 	if err != nil {
 		return nil, fmt.Errorf("unable to establish MySQL database handle: %w", err)
@@ -167,7 +173,6 @@ func (singleton) Logger(value logger) option {
 		if value == nil {
 			value = &nop{}
 		}
-
 		this.Logger = value
 	}
 }
