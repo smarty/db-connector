@@ -10,7 +10,9 @@ import (
 var ErrScan = errors.New("converting driver.Value type")
 
 // Uint64 represents an uint64 that may be null.
-// It's behavior is based on the implementation of database/sql.NullInt64.
+// Its behavior is based on the implementation of database/sql.NullInt64.
+// Because of limitations in the database/sql/driver package, this type
+// is limited to the maximum int64 value.
 type Uint64 struct {
 	Uint64 uint64
 	Valid  bool
@@ -55,5 +57,15 @@ func (n Uint64) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
 	}
-	return n.Uint64, nil
+	if n.Uint64 > maxInt64 {
+		return 0, fmt.Errorf("%w: %d", outOfBounds, n.Uint64)
+	}
+	return int64(n.Uint64), nil
 }
+
+const (
+	maxUint64 = ^uint64(0)
+	maxInt64  = maxUint64 >> 1
+)
+
+var outOfBounds = errors.New("out-of-bounds")

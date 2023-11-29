@@ -3,6 +3,7 @@ package null
 import (
 	"database/sql"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -57,24 +58,46 @@ func TestUint64Scan(t *testing.T) {
 		})
 	}
 }
-func TestUint64Value(t *testing.T) {
+func TestUint64Value_Invalid(t *testing.T) {
 	var v Uint64
-
+	v.Valid = false
 	v.Uint64 = 42
+
 	value, err := v.Value()
+
 	if value != nil {
 		t.Error("value should have been nil, but was:", value)
 	}
 	if err != nil {
 		t.Error("err should have been nil, but was:", err)
 	}
+}
+func TestUint64Value_ValidInt64Value(t *testing.T) {
+	var v Uint64
 
+	v.Uint64 = 42
 	v.Valid = true
-	value, err = v.Value()
-	if value != uint64(42) {
-		t.Error("valid value should have been 42, but was:", value)
+
+	value, err := v.Value()
+
+	if value != int64(42) {
+		t.Errorf("database/sql requires int64(42), but was: %s(%d)", reflect.TypeOf(value), value)
 	}
 	if err != nil {
 		t.Error("err should have been nil, but was:", err)
+	}
+}
+func TestUint64Value_OutOfBounds(t *testing.T) {
+	var v Uint64
+	v.Valid = true
+	v.Uint64 = maxInt64 + 1
+
+	value, err := v.Value()
+
+	if value != 0 {
+		t.Errorf("out-of-bounds value should not be returned")
+	}
+	if !errors.Is(err, outOfBounds) {
+		t.Error("expected out-of-bounds error but got:", err)
 	}
 }
