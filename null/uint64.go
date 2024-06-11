@@ -7,8 +7,13 @@ import (
 	"strconv"
 )
 
+// Deprecated
 var ErrScan = errors.New("converting driver.Value type")
 
+// Deprecated
+// Go 1.22 provides database/sql.Null[T] for all our nullable type needs.
+// Specifically, sql.Null[uint64] covers the use case of this type.
+//
 // Uint64 represents an uint64 that may be null.
 // Its behavior is based on the implementation of database/sql.NullInt64.
 type Uint64 struct {
@@ -16,6 +21,7 @@ type Uint64 struct {
 	Valid  bool
 }
 
+// Deprecated
 // Scan implements the Scanner interface.
 func (n *Uint64) Scan(value any) (err error) {
 	if value == nil {
@@ -53,6 +59,7 @@ func (n *Uint64) Scan(value any) (err error) {
 	return fmt.Errorf("%w %T (%v) to a uint64", ErrScan, value, value)
 }
 
+// Deprecated
 // Value implements the driver Valuer interface.
 func (n Uint64) Value() (driver.Value, error) {
 	if !n.Valid {
